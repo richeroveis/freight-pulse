@@ -543,6 +543,11 @@ class FreightPulse(gl.Contract):
         return int(self.shipment_count)
 
     @gl.public.view
+    def get_chain_clock(self) -> int:
+        """Current transaction timestamp used for every deadline decision."""
+        return _now_seconds()
+
+    @gl.public.view
     def get_shipment(self, shipment_id: u256) -> dict:
         return self._shipment_view(self._require_shipment(shipment_id))
 

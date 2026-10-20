@@ -15,12 +15,14 @@ import subprocess
 import sys
 import time
 import urllib.request
+import base64
 from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
 from genlayer_py import create_account, create_client
 from genlayer_py.chains import studionet
+from genlayer_py.types.transactions import TransactionResult, TransactionStatus
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,6 +76,17 @@ def normalize(value) -> str:
     if hasattr(value, "value"):
         return str(value.value)
     return str(value)
+
+
+def enum_name(enum_class, value, fallback: str = "") -> str:
+    if value is None:
+        return fallback
+    if hasattr(value, "value"):
+        return str(value.value)
+    try:
+        return str(list(enum_class)[int(value)].value)
+    except (ValueError, TypeError, IndexError):
+        return fallback or str(value)
 
 
 def git_blob_sha256() -> str | None:
@@ -139,13 +152,31 @@ class Runner:
         raise TimeoutError(f"transaction {tx_hash} did not finalize: {last}")
 
     def summarize(self, label: str, tx_hash: str, receipt: dict, expected_error: bool = False) -> dict:
-        status = normalize(receipt.get("status_name") or receipt.get("status"))
-        result = normalize(receipt.get("result_name") or receipt.get("result"))
-        execution = normalize(receipt.get("tx_execution_result_name"))
+        status = enum_name(
+            TransactionStatus,
+            receipt.get("status"),
+            normalize(receipt.get("status_name")),
+        )
+        result = enum_name(
+            TransactionResult,
+            receipt.get("result"),
+            normalize(receipt.get("result_name")),
+        )
         last_round = (receipt.get("last_round") or {})
         if not last_round:
             last_round = ((receipt.get("consensus_data") or {}).get("last_round") or {})
-        consensus = normalize(last_round.get("result"))
+        consensus = enum_name(TransactionResult, last_round.get("result"), result)
+        evm_status = None
+        try:
+            evm_status = int(self.client.w3.eth.get_transaction_receipt(tx_hash)["status"])
+        except Exception:
+            evm_status = None
+        if evm_status == 1:
+            execution = "FINISHED_WITH_RETURN"
+        elif evm_status == 0:
+            execution = "FINISHED_WITH_ERROR"
+        else:
+            execution = normalize(receipt.get("tx_execution_result_name")) or "UNKNOWN"
         record = {
             "label": label,
             "tx_hash": tx_hash,
@@ -153,6 +184,7 @@ class Runner:
             "result": result,
             "consensus_result": consensus or result,
             "execution_result": execution,
+            "evm_receipt_status": evm_status,
             "expected_error": expected_error,
             "finalized": status == "FINALIZED",
             "explorer_url": f"https://explorer-studio.genlayer.com/transactions/{tx_hash}",
@@ -196,6 +228,9 @@ class Runner:
 
     def read(self, function_name: str, args: list | None = None):
         return self.client.read_contract(self.address, function_name, args=args or [])
+
+    def chain_now(self) -> int:
+        return int(self.read("get_chain_clock"))
 
     def send_native(self, to: str, amount: int, nonce: int) -> str:
         w3 = self.client.w3
@@ -312,10 +347,14 @@ class Runner:
             raise RuntimeError(f"could not resolve contract address from deploy receipt: {receipt}")
         self.address = address
         self.state["contract_address"] = address
+        payload_sha = self.local_sha
+        code_b64 = (receipt.get("data") or {}).get("contract_code")
+        if code_b64:
+            payload_sha = sha256_bytes(base64.b64decode(code_b64))
         self.state["deployment"] = {
             "tx_hash": tx_hash,
             "address": address,
-            "deploy_payload_sha256": self.local_sha,
+            "deploy_payload_sha256": payload_sha,
             "contract_file_sha256": self.local_sha,
             "git_blob_sha256": self.git_sha,
             "git_head": git_head(),
@@ -332,15 +371,18 @@ class Runner:
         raw = response.get("result")
         if raw is None:
             raise RuntimeError(f"gen_getContractCode failed: {response}")
+        code_text = None
         if isinstance(raw, str):
-            text = raw[2:] if raw.startswith("0x") else raw
+            encoded = raw[2:] if raw.startswith("0x") else raw
             try:
-                code_bytes = bytes.fromhex(text)
-                code_text = code_bytes.decode("utf-8")
-            except (ValueError, UnicodeDecodeError):
-                code_text = raw
-        else:
-            code_text = str(raw)
+                code_text = base64.b64decode(encoded).decode("utf-8")
+            except Exception:
+                try:
+                    code_text = bytes.fromhex(encoded).decode("utf-8")
+                except Exception:
+                    code_text = None
+        if code_text is None:
+            raise RuntimeError("could not decode gen_getContractCode payload")
         return sha256_text(code_text), code_text
 
     # -- seeding ----------------------------------------------------------
@@ -360,7 +402,7 @@ class Runner:
     ) -> int:
         if key in self.state["shipments"]:
             return int(self.state["shipments"][key])
-        chain_now = int(time.time())
+        chain_now = self.chain_now()
         deadline = deadline_absolute or (chain_now + deadline_seconds)
         tx = self.client.write_contract(
             self.address,
@@ -490,7 +532,7 @@ class Runner:
             80_000 * FPT,
             32_000 * FPT,
             deadline_seconds=0,
-            deadline_absolute=int(time.time()) + 240,
+            deadline_absolute=self.chain_now() + 240,
         )
         print(f"[seed] abandoned order {abandoned} waits for its deadline", flush=True)
 
@@ -587,7 +629,7 @@ class Runner:
         ham = id_map["sin_ham_abandoned"]
         if self.status(ham)["status"] == "OPEN":
             deadline = int(self.status(ham)["delivery_deadline_clock"])
-            wait_for = deadline - int(time.time()) + 4
+            wait_for = deadline - self.chain_now() + 4
             if wait_for > 0:
                 print(f"[reclaim] waiting {wait_for}s for the deadline boundary", flush=True)
                 time.sleep(wait_for)
@@ -707,10 +749,11 @@ def main() -> None:
     mode = sys.argv[1] if len(sys.argv) > 1 else "all"
     runner = Runner()
     print(f"[init] main={runner.main.address} local_sha={runner.local_sha[:16]}...")
+    if mode != "deploy":
+        preflight()
     runner.deploy()
     if mode == "deploy":
         return
-    preflight()
     accounts = runner.ensure_accounts()
     runner.ensure_fpt(accounts)
     runner.seed(accounts)

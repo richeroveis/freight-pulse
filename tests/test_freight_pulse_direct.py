@@ -736,6 +736,13 @@ def test_list_shipments_projects_every_order(world):
     assert all(row["status"] == "OPEN" for row in rows)
 
 
+def test_chain_clock_tracks_the_injected_transaction_time(world):
+    set_chain_time(world.vm, "2030-01-01T00:00:00Z")
+    assert world.contract.get_chain_clock() == BASE_TS
+    set_chain_time(world.vm, "2030-01-01T01:00:00Z")
+    assert world.contract.get_chain_clock() == BASE_TS + 3600
+
+
 def test_unknown_shipment_view_reverts(world):
     with world.vm.expect_revert("shipment does not exist"):
         world.contract.get_shipment(999)
