@@ -63,12 +63,18 @@ settlement.
 8. **Input floors and ceilings.** Deadline windows are bounded to 180 seconds and 180 days. Transit
    is bounded to 1 hour and 8760 hours. Temperatures are bounded to -90 C and 60 C. Fees and bonds
    are bounded and must be positive.
+9. **Injection tested, not assumed.** Settlement reads the machine-readable manifest lines
+   deterministically; the model attestation is only a cross-check that must agree or the audit
+   reverts, so a manipulated model can fail closed but can never move funds.
+
+The full state machine, liveness, race and invariant analysis is recorded in
+[docs/security-review.md](docs/security-review.md).
 
 ## Repository layout
 
 ```text
 contracts/freight_pulse.py          GenLayer Intelligent Contract, pinned runner
-tests/test_freight_pulse_direct.py  93 direct mode tests
+tests/test_freight_pulse_direct.py  95 direct mode tests
 tests/conftest.py                   Windows unlink workaround and fixtures
 scripts/deploy_studionet.py         resumable deploy, multi-signer seeding, evidence
 frontend/                           React, TypeScript, Vite, Tailwind flagship UI

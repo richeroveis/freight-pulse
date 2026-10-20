@@ -431,13 +431,15 @@ def scene_evidence(frame: Image.Image, draw: ImageDraw.ImageDraw, t: float) -> N
     text(draw, (60, 120), "Verifiable deployment identity", TITLE_SMALL, WHITE)
     text(draw, (62, 160), "Four independent sha256 reads resolve to the same contract source.", BODY, MIST)
     evidence = load_evidence()
+    if not evidence.get("four_way_sha256"):
+        raise SystemExit("Run scripts/deploy_studionet.py first so the evidence JSON exists")
     four = evidence.get("four_way_sha256", {})
-    contract = evidence.get("contract_address", "0x96Ff91bA7AB99e9E9089cC6aa9FF5Ef31500becb")
+    contract = evidence.get("contract_address", "")
     labels = [
-        ("local contract file", four.get("contract_file_sha256", "17ff4905...a15f4")),
-        ("git blob at HEAD", four.get("git_blob_sha256", "17ff4905...a15f4")),
-        ("deploy payload", four.get("deploy_payload_sha256", "17ff4905...a15f4")),
-        ("on-chain source", four.get("on_chain_code_sha256", "17ff4905...a15f4")),
+        ("local contract file", four.get("contract_file_sha256", "")),
+        ("git blob at HEAD", four.get("git_blob_sha256", "")),
+        ("deploy payload", four.get("deploy_payload_sha256", "")),
+        ("on-chain source", four.get("on_chain_code_sha256", "")),
     ]
     for index, (label, value) in enumerate(labels):
         x = 60 + (index % 2) * 600
