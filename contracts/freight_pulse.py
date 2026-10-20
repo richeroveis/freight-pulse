@@ -1031,8 +1031,7 @@ class FreightPulse(gl.Contract):
                 "CUSTOMS must be CLEARED or REJECTED. Temperatures and hours use digits "
                 "and one decimal point, with no units.\n"
                 f"Reference bill of lading: {bol}\n"
-                f"Contract temperature ceiling in Celsius: {_format_c_x100(max_temp_c_x100)}\n"
-                f"Contract transit SLA in hours: {_format_minutes_as_hours(max_transit_minutes)}\n"
+                "Use only the values written inside the manifest. Do not use any other number.\n"
                 "----- BEGIN UNTRUSTED MANIFEST -----\n"
                 f"{text}\n"
                 "----- END UNTRUSTED MANIFEST -----"
@@ -1041,14 +1040,6 @@ class FreightPulse(gl.Contract):
             attested = _parse_llm_evidence(raw, bol)
             if attested["echoed_bol"].strip().lower() != bol.lower():
                 raise gl.vm.UserError(f"{ERROR_EXPECTED} attestation echoed a different bill of lading")
-            if (
-                bool(attested["customs_cleared"]) != bool(deterministic["customs_cleared"])
-                or int(attested["peak_temp_c_x100"]) != int(deterministic["peak_temp_c_x100"])
-                or int(attested["transit_minutes"]) != int(deterministic["transit_minutes"])
-            ):
-                raise gl.vm.UserError(
-                    f"{ERROR_EXPECTED} attestation disagrees with the machine-readable manifest"
-                )
             verdict = _compute_fulfilment_band(
                 True,
                 bool(deterministic["customs_cleared"]),
@@ -1059,6 +1050,24 @@ class FreightPulse(gl.Contract):
                 freight_fee,
                 carrier_bond,
             )
+            attested_verdict = _compute_fulfilment_band(
+                True,
+                bool(attested["customs_cleared"]),
+                int(attested["peak_temp_c_x100"]),
+                max_temp_c_x100,
+                int(attested["transit_minutes"]),
+                max_transit_minutes,
+                freight_fee,
+                carrier_bond,
+            )
+            if (
+                bool(attested["customs_cleared"]) != bool(deterministic["customs_cleared"])
+                or str(attested_verdict["fulfilment_band"]) != str(verdict["fulfilment_band"])
+                or bool(attested_verdict["temp_breached"]) != bool(verdict["temp_breached"])
+            ):
+                raise gl.vm.UserError(
+                    f"{ERROR_EXPECTED} attestation outcome disagrees with the machine-readable manifest"
+                )
             return {
                 "bill_of_lading_id": bol,
                 "customs_cleared": bool(deterministic["customs_cleared"]),

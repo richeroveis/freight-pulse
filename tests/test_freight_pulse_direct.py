@@ -453,6 +453,15 @@ def test_audit_rejects_pipe_attestation_that_disagrees(world, shipment):
         audit(world.vm, world.contract, world.charlie, shipment.id)
 
 
+def test_audit_tolerates_rounding_inside_the_same_band(world, shipment):
+    _ready(world, shipment.id)
+    mock_manifest(world.vm, f"CLEARED|2.4|14.7|{DEFAULT_BOL}")
+    result = audit(world.vm, world.contract, world.charlie, shipment.id)
+    assert result["fulfilment_band"] == "FULL_ON_TIME_RELEASE"
+    assert result["recorded_temp_c_x100"] == 210
+    assert result["recorded_transit_minutes"] == 870
+
+
 def test_audit_rejects_manifest_without_machine_readable_fields(world, shipment):
     _ready(world, shipment.id)
     body = f"Bill of lading: {DEFAULT_BOL}\nCustoms status: CLEARED\nNo telemetry lines here.\n"

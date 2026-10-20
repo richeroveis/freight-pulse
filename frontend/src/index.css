@@ -1,0 +1,189 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --abyss: #060d1a;
+  --hull: #0a1424;
+  --rail: #1b2c44;
+  --ice: #7fe3f0;
+  --teal: #2dd4bf;
+  --coral: #fb7185;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  background: var(--abyss);
+}
+
+body {
+  margin: 0;
+  color: #e6f1ff;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(1100px 600px at 12% -10%, rgba(45, 212, 191, 0.13), transparent 60%),
+    radial-gradient(900px 520px at 88% 0%, rgba(127, 227, 240, 0.11), transparent 62%),
+    radial-gradient(800px 700px at 50% 110%, rgba(251, 113, 133, 0.07), transparent 60%),
+    linear-gradient(180deg, #060d1a 0%, #050a13 100%);
+  background-attachment: fixed;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(27, 44, 68, 0.32) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(27, 44, 68, 0.32) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(circle at 50% 20%, black 0%, transparent 78%);
+  opacity: 0.5;
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+::selection {
+  background: rgba(127, 227, 240, 0.28);
+  color: #ffffff;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #1b2c44 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #1b2c44;
+  border-radius: 999px;
+}
+
+@layer components {
+  .panel {
+    @apply relative rounded-2xl border border-rail/70 bg-hull/80 backdrop-blur-xl;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 18px 50px rgba(0, 0, 0, 0.28);
+  }
+
+  .panel-soft {
+    @apply rounded-xl border border-rail/50 bg-deck/60;
+  }
+
+  .label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.22em] text-mist/80;
+  }
+
+  .mono {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em];
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-rail bg-deck px-3 py-2 text-xs font-semibold text-mist transition hover:border-ice/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-ice/40 bg-ice/10 px-3 py-2 text-xs font-semibold text-ice transition hover:bg-ice/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .input-range {
+    @apply h-1.5 w-full cursor-pointer appearance-none rounded-full bg-rail/80;
+  }
+
+  .input-range::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: #7fe3f0;
+    border: 2px solid #06101d;
+    box-shadow: 0 0 14px rgba(127, 227, 240, 0.65);
+  }
+
+  .input-range::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: #7fe3f0;
+    border: 2px solid #06101d;
+    box-shadow: 0 0 14px rgba(127, 227, 240, 0.65);
+  }
+
+  .scanline {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scanline::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 35%;
+    background: linear-gradient(90deg, transparent, rgba(127, 227, 240, 0.08), transparent);
+    animation: scan 3.4s ease-in-out infinite;
+  }
+}
+
+.terminal {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  background:
+    linear-gradient(180deg, rgba(10, 20, 36, 0.96), rgba(6, 13, 26, 0.98));
+  border: 1px solid rgba(45, 212, 191, 0.22);
+  box-shadow: inset 0 0 40px rgba(45, 212, 191, 0.05);
+}
+
+.terminal-line::before {
+  content: "$ ";
+  color: #2dd4bf;
+}
+
+.gauge-track {
+  filter: drop-shadow(0 0 6px rgba(127, 227, 240, 0.25));
+}
+
+.drawer-enter {
+  animation: drawerIn 220ms ease-out both;
+}
+
+@keyframes drawerIn {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.fade-up {
+  animation: fadeUp 420ms ease-out both;
+}
+
+@keyframes fadeUp {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
