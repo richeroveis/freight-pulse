@@ -19,6 +19,9 @@ dist/
 *.mp4
 *.webm
 *.wav
+# whitelist the final demo video so reviewers get direct repo and site access
+!docs/demo-video-subtitled.mp4
+!frontend/public/demo-video-subtitled.mp4
 
 # evidence + build artifacts
 evidence/_checkpoint.json
