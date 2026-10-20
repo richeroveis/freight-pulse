@@ -32,6 +32,11 @@ if sys.platform == "win32":  # pragma: no cover - exercised only on Windows
 
 
 FPT = 10**6
+# Pinned GenVM release used by direct mode. v0.2.16 publishes the
+# genvm-universal.tar.xz bundle that contains the runner hash pinned in the
+# contract header. Override with GENLAYER_DIRECT_SDK_VERSION if a newer release
+# republishes the universal bundle.
+SDK_VERSION = os.environ.get("GENLAYER_DIRECT_SDK_VERSION", "v0.2.16")
 BASE_ISO = "2030-01-01T00:00:00Z"
 BASE_TS = 1893456000
 DEFAULT_FEE = 50_000 * FPT
@@ -148,7 +153,7 @@ def audit(direct_vm, contract, caller, shipment_id: int) -> dict:
 @pytest.fixture
 def world(direct_vm, direct_deploy, direct_alice, direct_bob, direct_charlie):
     """Deployed contract with three funded test accounts and a fixed clock."""
-    contract = direct_deploy("contracts/freight_pulse.py")
+    contract = direct_deploy("contracts/freight_pulse.py", sdk_version=SDK_VERSION)
     set_chain_time(direct_vm, BASE_ISO)
     for account in (direct_alice, direct_bob, direct_charlie):
         mint(direct_vm, contract, account)
