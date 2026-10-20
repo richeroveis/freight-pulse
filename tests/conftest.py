@@ -96,13 +96,17 @@ def mock_manifest(
     body: str | None = None,
     url_pattern: str = r"https://cargo\.example\.com/manifests/.*",
 ) -> None:
+    payload_dict = direct_vm_llm_payload if isinstance(direct_vm_llm_payload, dict) else {}
+    temperature = payload_dict.get("peak_temp_celsius", 2.1)
+    transit = payload_dict.get("transit_hours", 14.5)
+    customs = "CLEARED" if payload_dict.get("customs_cleared", True) else "REJECTED"
     default_body = (
         "FREIGHT PULSE CARRIER DELIVERY MANIFEST\n"
         f"Bill of lading: {DEFAULT_BOL}\n"
         "Vessel voyage: FP-204\n"
-        "Customs status: CLEARED\n"
-        "Peak cargo temperature: 2.1 C\n"
-        "Transit time: 14.5 h\n"
+        f"Customs status: {customs}\n"
+        f"Peak cargo temperature: {temperature if temperature is not None else 2.1} C\n"
+        f"Transit time: {transit if transit is not None else 14.5} h\n"
     )
     direct_vm.mock_web(url_pattern, {"status": 200, "body": body or default_body})
     payload = (

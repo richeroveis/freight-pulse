@@ -427,7 +427,37 @@ def test_audit_fail_closed_on_ambiguous_customs(world, shipment):
 def test_audit_fail_closed_on_non_json(world, shipment):
     _ready(world, shipment.id)
     mock_manifest(world.vm, "NOT JSON AT ALL")
-    with world.vm.expect_revert("no JSON object"):
+    with world.vm.expect_revert("expected CUSTOMS|TEMP|TRANSIT|BOL"):
+        audit(world.vm, world.contract, world.charlie, shipment.id)
+
+
+def test_audit_accepts_compact_pipe_attestation(world, shipment):
+    _ready(world, shipment.id)
+    mock_manifest(world.vm, f"CLEARED|2.1|14.5|{DEFAULT_BOL}")
+    result = audit(world.vm, world.contract, world.charlie, shipment.id)
+    assert result["fulfilment_band"] == "FULL_ON_TIME_RELEASE"
+    assert result["recorded_temp_c_x100"] == 210
+
+
+def test_audit_rejects_pipe_attestation_with_wrong_bol(world, shipment):
+    _ready(world, shipment.id)
+    mock_manifest(world.vm, "CLEARED|2.1|14.5|BOL-OTHER-999")
+    with world.vm.expect_revert("did not echo the bill of lading"):
+        audit(world.vm, world.contract, world.charlie, shipment.id)
+
+
+def test_audit_rejects_pipe_attestation_that_disagrees(world, shipment):
+    _ready(world, shipment.id)
+    mock_manifest(world.vm, f"CLEARED|9.9|14.5|{DEFAULT_BOL}")
+    with world.vm.expect_revert("disagrees with the machine-readable manifest"):
+        audit(world.vm, world.contract, world.charlie, shipment.id)
+
+
+def test_audit_rejects_manifest_without_machine_readable_fields(world, shipment):
+    _ready(world, shipment.id)
+    body = f"Bill of lading: {DEFAULT_BOL}\nCustoms status: CLEARED\nNo telemetry lines here.\n"
+    mock_manifest(world.vm, default_analysis(), body=body)
+    with world.vm.expect_revert("missing machine-readable cold-chain fields"):
         audit(world.vm, world.contract, world.charlie, shipment.id)
 
 

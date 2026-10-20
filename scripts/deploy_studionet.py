@@ -166,17 +166,26 @@ class Runner:
         if not last_round:
             last_round = ((receipt.get("consensus_data") or {}).get("last_round") or {})
         consensus = enum_name(TransactionResult, last_round.get("result"), result)
-        evm_status = None
-        try:
-            evm_status = int(self.client.w3.eth.get_transaction_receipt(tx_hash)["status"])
-        except Exception:
-            evm_status = None
-        if evm_status == 1:
+        leader_receipt = (receipt.get("consensus_data") or {}).get("leader_receipt") or []
+        execution_status = ""
+        execution_payload = ""
+        if leader_receipt:
+            leader_result = leader_receipt[0].get("result") or {}
+            if isinstance(leader_result, dict):
+                execution_status = normalize(leader_result.get("status"))
+                payload = leader_result.get("payload")
+                execution_payload = str(payload)[:600] if payload is not None else ""
+        if execution_status == "return":
             execution = "FINISHED_WITH_RETURN"
-        elif evm_status == 0:
+        elif execution_status in ("rollback", "error"):
             execution = "FINISHED_WITH_ERROR"
         else:
-            execution = normalize(receipt.get("tx_execution_result_name")) or "UNKNOWN"
+            evm_status = None
+            try:
+                evm_status = int(self.client.w3.eth.get_transaction_receipt(tx_hash)["status"])
+            except Exception:
+                evm_status = None
+            execution = "FINISHED_WITH_RETURN" if evm_status == 1 else "UNKNOWN"
         record = {
             "label": label,
             "tx_hash": tx_hash,
@@ -184,7 +193,8 @@ class Runner:
             "result": result,
             "consensus_result": consensus or result,
             "execution_result": execution,
-            "evm_receipt_status": evm_status,
+            "execution_status": execution_status,
+            "execution_payload": execution_payload,
             "expected_error": expected_error,
             "finalized": status == "FINALIZED",
             "explorer_url": f"https://explorer-studio.genlayer.com/transactions/{tx_hash}",
@@ -201,19 +211,19 @@ class Runner:
         )
         return record
 
-    def write(
-        self,
-        label: str,
-        function_name: str,
-        args: list,
-        account=None,
-        expected_error: bool = False,
-    ) -> dict:
+    def send_write(self, function_name: str, args: list, account=None) -> str:
         sender = account or self.main
         tx_hash = self.client.write_contract(
             self.address, function_name, account=sender, args=args
         )
-        tx_hash = tx_hash.hex() if hasattr(tx_hash, "hex") else str(tx_hash)
+        return tx_hash.hex() if hasattr(tx_hash, "hex") else str(tx_hash)
+
+    def await_write(
+        self,
+        label: str,
+        tx_hash: str,
+        expected_error: bool = False,
+    ) -> dict:
         receipt = self.wait_final(tx_hash)
         record = self.summarize(label, tx_hash, receipt, expected_error)
         if not expected_error:
@@ -225,6 +235,17 @@ class Runner:
             if record["execution_result"] != "FINISHED_WITH_ERROR":
                 raise RuntimeError(f"{label} was expected to revert but did not: {record}")
         return record
+
+    def write(
+        self,
+        label: str,
+        function_name: str,
+        args: list,
+        account=None,
+        expected_error: bool = False,
+    ) -> dict:
+        tx_hash = self.send_write(function_name, args, account)
+        return self.await_write(label, tx_hash, expected_error)
 
     def read(self, function_name: str, args: list | None = None):
         return self.client.read_contract(self.address, function_name, args=args or [])
@@ -292,9 +313,7 @@ class Runner:
                 account = create_account()
                 self.state["accounts"][role] = {
                     "address": account.address,
-                    "private_key": account.private_key.hex()
-                    if hasattr(account.private_key, "hex")
-                    else str(account.private_key),
+                    "private_key": account.key.hex(),
                 }
                 save_checkpoint(self.state)
             accounts[role] = account
@@ -584,21 +603,33 @@ class Runner:
             )
 
         # Live consensus on three realistic shipments plus the guard shipment.
-        for key, label in [
-            ("gva_sin_biologics", "audit gva_sin"),
-            ("rtm_tyo_photoresist", "audit rtm_tyo"),
-            ("osl_nyc_seafood", "audit osl_nyc"),
-            ("lax_bcn_aerospace", "audit lax_bcn"),
-        ]:
-            self.ensure_audit(id_map[key], label)
+        # Each audit is signed by a different account so the four transactions
+        # can be submitted as one round without nonce collisions.
+        audit_plan = [
+            ("gva_sin_biologics", "audit gva_sin", self.main),
+            ("rtm_tyo_photoresist", "audit rtm_tyo", accounts["carrier_gva"]),
+            ("osl_nyc_seafood", "audit osl_nyc", accounts["shipper_rtm"]),
+            ("lax_bcn_aerospace", "audit lax_bcn", accounts["carrier_rtm"]),
+        ]
+        audit_jobs = []
+        for key, label, actor in audit_plan:
+            if self.status(id_map[key])["status"] == "MANIFEST_SUBMITTED":
+                audit_jobs.append((label, self.send_write("audit_shipment_fulfilment_live", [id_map[key]], actor)))
+        for label, tx_hash in audit_jobs:
+            self.await_write(label, tx_hash)
 
-        for key, label in [
-            ("gva_sin_biologics", "claim gva_sin"),
-            ("rtm_tyo_photoresist", "claim rtm_tyo"),
-            ("osl_nyc_seafood", "claim osl_nyc"),
-            ("lax_bcn_aerospace", "claim lax_bcn"),
-        ]:
-            self.ensure_claim(id_map[key], label)
+        claim_plan = [
+            ("gva_sin_biologics", "claim gva_sin", accounts["shipper_osl"]),
+            ("rtm_tyo_photoresist", "claim rtm_tyo", accounts["carrier_osl"]),
+            ("osl_nyc_seafood", "claim osl_nyc", accounts["carrier_dxb"]),
+            ("lax_bcn_aerospace", "claim lax_bcn", accounts["carrier_lax"]),
+        ]
+        claim_jobs = []
+        for key, label, actor in claim_plan:
+            if self.status(id_map[key])["status"] == "AUDIT_VERIFIED":
+                claim_jobs.append((label, self.send_write("claim_shipment_settlement", [id_map[key]], actor)))
+        for label, tx_hash in claim_jobs:
+            self.await_write(label, tx_hash)
 
         # Two party mutual release: one signature must not settle, an outsider
         # must be rejected, and the matching counter signature settles.
