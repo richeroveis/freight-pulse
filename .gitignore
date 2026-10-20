@@ -1,0 +1,32 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# python
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.gltest_cache/
+*.pyc
+
+# node
+node_modules/
+dist/
+
+# media
+*.mp4
+*.webm
+*.wav
+
+# evidence + build artifacts
+evidence/_checkpoint.json
+artifacts/
+
+# local credential helper
+.git-askpass.sh
+
+# ignored probe files
+evidence/_*.html
+evidence/_*.js

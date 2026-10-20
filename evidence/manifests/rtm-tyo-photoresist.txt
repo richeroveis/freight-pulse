@@ -1,0 +1,13 @@
+FREIGHT PULSE CARRIER DELIVERY MANIFEST
+Carrier: Rhine Delta Ocean Lines
+Vessel voyage: RDX-7712 / RTM to TYO
+Bill of Lading: BOL-RTM-TYO-42
+Consignment: semiconductor photoresist drums, 8 pallets, 2 to 8 C validated
+Customs declaration: JP-2026-771903
+Customs status: CLEARED
+Customs release timestamp: 2026-10-20T02:40:00Z
+Peak cargo temperature: 6.1 C
+Temperature logger: Tive Solo 5G, serial TV-44219
+Transit time: 34.5 h
+Door delivery: Yokohama cold distribution hub, bay 12
+Remarks: berth congestion at Tokyo added 4.5 h to the scheduled transit.

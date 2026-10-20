@@ -1,0 +1,13 @@
+FREIGHT PULSE CARRIER DELIVERY MANIFEST
+Carrier: Nordic Reefer Express
+Vessel voyage: NRE-1180 / OSL to NYC
+Bill of Lading: BOL-OSL-NYC-19
+Consignment: fresh Atlantic salmon fillets, 22 pallets, 0 to 2 C validated
+Customs declaration: US-2026-119045
+Customs status: CLEARED
+Customs release timestamp: 2026-10-20T05:05:00Z
+Peak cargo temperature: 6.8 C
+Temperature logger: Emerson GO Real-Time 4G, serial EM-77310
+Transit time: 20.4 h
+Door delivery: Hunts Point cold terminal, dock 7
+Remarks: reefer compressor alarm during Atlantic crossing, cargo inspected on arrival.

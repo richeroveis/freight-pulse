@@ -1,0 +1,13 @@
+FREIGHT PULSE CARRIER DELIVERY MANIFEST
+Carrier: Helvetia Cold Air Cargo AG
+Flight: HC-2041 / GVA to SIN
+Bill of Lading: BOL-GVA-SIN-77
+Consignment: mRNA biologic intermediates, 14 pallets, 2 to 4 C validated shippers
+Customs declaration: SG-2026-884120
+Customs status: CLEARED
+Customs release timestamp: 2026-10-20T04:12:00Z
+Peak cargo temperature: 2.4 C
+Temperature logger: Sensitech TempTale 4, serial TT4-99120
+Transit time: 16.2 h
+Door delivery: Changi Airfreight Centre, cold room 3
+Remarks: no temperature excursion recorded, data logger sealed and intact.

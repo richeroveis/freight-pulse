@@ -1,0 +1,13 @@
+FREIGHT PULSE CARRIER DELIVERY MANIFEST
+Carrier: Pacific Iberia Air Cargo
+Flight: PI-552 / LAX to BCN
+Bill of Lading: BOL-LAX-BCN-55
+Consignment: aerospace composite adhesives, 6 pallets, 2 to 6 C validated
+Customs declaration: ES-2026-552018
+Customs status: CLEARED
+Customs release timestamp: 2026-10-20T06:18:00Z
+Peak cargo temperature: 4.3 C
+Temperature logger: Controlant CO 4G, serial CA-31008
+Transit time: 24.1 h
+Door delivery: Barcelona El Prat cargo cold store
+Remarks: documentation complete, seal intact, no excursion.
