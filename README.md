@@ -8,7 +8,8 @@ independent validators fetch the carrier's delivery manifest, agree on customs c
 cargo temperature and transit time, and derive a discrete fulfilment band. There is no owner,
 admin or steward method that can move funds.
 
-- Live contract: `STUDIONET_CONTRACT_ADDRESS`
+- Live contract: [`0x67D9ed75E65E646499013e9da65caace82c97eb9`](https://explorer-studio.genlayer.com/address/0x67D9ed75E65E646499013e9da65caace82c97eb9)
+- Deploy tx: `0xa95f9b381dde640b73949c284df8a67d06148f12b1f4c8d01755f5fe85752d95`
 - Network: GenLayer studionet, chain id `61999`
 - Evidence: [`evidence/studionet_deployment.json`](evidence/studionet_deployment.json)
 - Frontend: `https://richeroveis.github.io/freight-pulse/`
@@ -67,7 +68,7 @@ settlement.
 
 ```text
 contracts/freight_pulse.py          GenLayer Intelligent Contract, pinned runner
-tests/test_freight_pulse_direct.py  87 direct mode tests
+tests/test_freight_pulse_direct.py  93 direct mode tests
 tests/conftest.py                   Windows unlink workaround and fixtures
 scripts/deploy_studionet.py         resumable deploy, multi-signer seeding, evidence
 frontend/                           React, TypeScript, Vite, Tailwind flagship UI

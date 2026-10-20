@@ -265,7 +265,7 @@ export default function App() {
                 </p>
                 <div className="mt-3 flex items-center gap-2">
                   <span className="chip border-teal/30 bg-teal/5 text-teal">4-way sha256</span>
-                  <span className="chip border-ice/30 bg-ice/5 text-ice">direct tests 92</span>
+                  <span className="chip border-ice/30 bg-ice/5 text-ice">direct tests 93</span>
                 </div>
               </div>
             </div>

@@ -1,5 +1,5 @@
 export const CONTRACT_ADDRESS = (import.meta.env.VITE_CONTRACT_ADDRESS ||
-  "0xF5cfd095EB3FE684DFe3c48b751D9817EAa48317") as `0x${string}`;
+  "0x67D9ed75E65E646499013e9da65caace82c97eb9") as `0x${string}`;
 
 export const STUDIONET_RPC =
   import.meta.env.VITE_STUDIONET_RPC || "https://studio.genlayer.com/api";

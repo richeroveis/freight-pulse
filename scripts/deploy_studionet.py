@@ -35,6 +35,7 @@ RAW_BASE = f"https://raw.githubusercontent.com/{REPO_SLUG}/main/evidence/manifes
 FPT = 10**6
 CHAIN_ID = 61999
 ZERO = "0x" + "00" * 20
+MIN_RPC_INTERVAL = 2.6
 
 
 def now_iso() -> str:
@@ -132,6 +133,50 @@ class Runner:
         self.local_sha = sha256_text(self.code)
         self.git_sha = git_blob_sha256()
         self.address = self.state.get("contract_address")
+        self._last_rpc = 0.0
+        self.rate_limit_hits = 0
+        self.transient_retries = 0
+
+    # -- RPC pacing -------------------------------------------------------
+
+    def _call(self, function, *args, **kwargs):
+        """Every studionet call is paced and retried on the 30 req/min limit."""
+        for attempt in range(8):
+            wait = self._last_rpc + MIN_RPC_INTERVAL - time.time()
+            if wait > 0:
+                time.sleep(wait)
+            self._last_rpc = time.time()
+            try:
+                return function(*args, **kwargs)
+            except Exception as exc:
+                message = str(exc)
+                if "Rate limit" in message or "429" in message or "rate limit" in message:
+                    self.rate_limit_hits += 1
+                    delay = 35 + attempt * 15
+                    print(f"[rate] studionet limit hit, sleeping {delay}s", flush=True)
+                    time.sleep(delay)
+                    continue
+                transient_tokens = (
+                    "Connection reset",
+                    "Connection aborted",
+                    "RemoteDisconnected",
+                    "timed out",
+                    "Timeout",
+                    "Temporary failure",
+                    "ECONNRESET",
+                    "ConnectionError",
+                    "502",
+                    "503",
+                    "504",
+                )
+                if any(token in message for token in transient_tokens):
+                    self.transient_retries += 1
+                    delay = 8 + attempt * 8
+                    print(f"[rpc] transient failure, retrying in {delay}s: {message[:90]}", flush=True)
+                    time.sleep(delay)
+                    continue
+                raise
+        raise RuntimeError("studionet rate limit persisted after 8 attempts")
 
     # -- chain helpers ----------------------------------------------------
 
@@ -140,7 +185,7 @@ class Runner:
         last = None
         while time.time() < deadline:
             try:
-                last = self.client.get_transaction(tx_hash)
+                last = self._call(self.client.get_transaction, tx_hash)
             except Exception as exc:  # transient RPC errors are expected
                 last = {"error": str(exc)}
             status = normalize((last or {}).get("status_name") or (last or {}).get("status"))
@@ -148,7 +193,7 @@ class Runner:
                 return last
             if status in ("CANCELED", "VALIDATORS_TIMEOUT", "LEADER_TIMEOUT"):
                 return last
-            time.sleep(3)
+            time.sleep(5)
         raise TimeoutError(f"transaction {tx_hash} did not finalize: {last}")
 
     def summarize(self, label: str, tx_hash: str, receipt: dict, expected_error: bool = False) -> dict:
@@ -180,9 +225,8 @@ class Runner:
         elif execution_status in ("rollback", "error"):
             execution = "FINISHED_WITH_ERROR"
         else:
-            evm_status = None
             try:
-                evm_status = int(self.client.w3.eth.get_transaction_receipt(tx_hash)["status"])
+                evm_status = int(self._call(self.client.w3.eth.get_transaction_receipt, tx_hash)["status"])
             except Exception:
                 evm_status = None
             execution = "FINISHED_WITH_RETURN" if evm_status == 1 else "UNKNOWN"
@@ -213,8 +257,12 @@ class Runner:
 
     def send_write(self, function_name: str, args: list, account=None) -> str:
         sender = account or self.main
-        tx_hash = self.client.write_contract(
-            self.address, function_name, account=sender, args=args
+        tx_hash = self._call(
+            self.client.write_contract,
+            self.address,
+            function_name,
+            account=sender,
+            args=args,
         )
         return tx_hash.hex() if hasattr(tx_hash, "hex") else str(tx_hash)
 
@@ -248,7 +296,7 @@ class Runner:
         return self.await_write(label, tx_hash, expected_error)
 
     def read(self, function_name: str, args: list | None = None):
-        return self.client.read_contract(self.address, function_name, args=args or [])
+        return self._call(self.client.read_contract, self.address, function_name, args=args or [])
 
     def chain_now(self) -> int:
         return int(self.read("get_chain_clock"))
@@ -265,14 +313,14 @@ class Runner:
             "data": b"",
         }
         signed = self.main.sign_transaction(tx)
-        return w3.eth.send_raw_transaction(signed.raw_transaction).hex()
+        return self._call(w3.eth.send_raw_transaction, signed.raw_transaction).hex()
 
     def fund_accounts(self, roles: list[tuple[str, object]]) -> None:
         w3 = self.client.w3
-        nonce = w3.eth.get_transaction_count(self.main.address)
+        nonce = self._call(w3.eth.get_transaction_count, self.main.address)
         pending = []
         for role, account in roles:
-            balance = self.client.get_balance(account.address)
+            balance = self._call(self.client.get_balance, account.address)
             if balance >= 2 * 10**18:
                 continue
             top_up = 3 * 10**18 - balance
@@ -287,10 +335,10 @@ class Runner:
         if pending:
             for role, account in roles:
                 for _ in range(40):
-                    if self.client.get_balance(account.address) >= 10**18:
+                    if self._call(self.client.get_balance, account.address) >= 10**18:
                         break
                     time.sleep(2)
-                print(f"[fund] {role} balance {self.client.get_balance(account.address)}", flush=True)
+                print(f"[fund] {role} balance {self._call(self.client.get_balance, account.address)}", flush=True)
 
     def ensure_accounts(self) -> dict[str, object]:
         roles = [
@@ -323,11 +371,16 @@ class Runner:
     def ensure_fpt(self, accounts: dict[str, object]) -> None:
         targets = [("main", self.main)] + list(accounts.items())
         threshold = 400_000 * FPT
+        jobs = []
         for role, account in targets:
             balance = self.read("get_token_balance", [account.address])
             if int(balance) >= threshold:
                 continue
-            self.write(f"faucet {role}", "faucet_or_deposit", [2_000_000 * FPT], account=account)
+            jobs.append(
+                (role, self.send_write("faucet_or_deposit", [2_000_000 * FPT], account))
+            )
+        for role, tx_hash in jobs:
+            self.await_write(f"faucet {role}", tx_hash)
 
     # -- deployment -------------------------------------------------------
 
@@ -335,7 +388,7 @@ class Runner:
         if self.address:
             print(f"[deploy] reusing checkpoint address {self.address}", flush=True)
             try:
-                schema = self.client.get_contract_schema(self.address)
+                schema = self._call(self.client.get_contract_schema, self.address)
                 if schema:
                     self.state.setdefault("deployment", {})["reused"] = True
                     save_checkpoint(self.state)
@@ -344,7 +397,7 @@ class Runner:
                 print(f"[deploy] checkpoint address unusable: {exc}", flush=True)
 
         print("[deploy] sending deployment transaction", flush=True)
-        tx_hash = self.client.deploy_contract(self.code, account=self.main, args=[])
+        tx_hash = self._call(self.client.deploy_contract, self.code, account=self.main, args=[])
         tx_hash = tx_hash.hex() if hasattr(tx_hash, "hex") else str(tx_hash)
         receipt = self.wait_final(tx_hash, timeout=1200)
         record = self.summarize("deploy FreightPulse", tx_hash, receipt)
@@ -357,7 +410,7 @@ class Runner:
         for candidate in candidates:
             if candidate and str(candidate).lower() != ZERO:
                 try:
-                    if self.client.get_contract_schema(candidate):
+                    if self._call(self.client.get_contract_schema, candidate):
                         address = candidate
                         break
                 except Exception:
@@ -384,8 +437,8 @@ class Runner:
         print(f"[deploy] contract at {address}", flush=True)
 
     def verify_chain_code(self) -> tuple[str, str]:
-        response = self.client.provider.make_request(
-            method="gen_getContractCode", params=[self.address]
+        response = self._call(
+            self.client.provider.make_request, method="gen_getContractCode", params=[self.address]
         )
         raw = response.get("result")
         if raw is None:
@@ -556,11 +609,19 @@ class Runner:
         print(f"[seed] abandoned order {abandoned} waits for its deadline", flush=True)
 
         id_map = {key: int(value) for key, value in self.state["shipments"].items()}
-        self.ensure_accept(id_map["gva_sin_biologics"], accounts["carrier_gva"], "accept gva_sin")
-        self.ensure_accept(id_map["rtm_tyo_photoresist"], accounts["carrier_rtm"], "accept rtm_tyo")
-        self.ensure_accept(id_map["osl_nyc_seafood"], accounts["carrier_osl"], "accept osl_nyc")
-        self.ensure_accept(id_map["gva_dxb_mutual"], accounts["carrier_dxb"], "accept gva_dxb")
-        self.ensure_accept(id_map["lax_bcn_aerospace"], accounts["carrier_lax"], "accept lax_bcn")
+        accept_plan = [
+            (id_map["gva_sin_biologics"], accounts["carrier_gva"], "accept gva_sin"),
+            (id_map["rtm_tyo_photoresist"], accounts["carrier_rtm"], "accept rtm_tyo"),
+            (id_map["osl_nyc_seafood"], accounts["carrier_osl"], "accept osl_nyc"),
+            (id_map["gva_dxb_mutual"], accounts["carrier_dxb"], "accept gva_dxb"),
+            (id_map["lax_bcn_aerospace"], accounts["carrier_lax"], "accept lax_bcn"),
+        ]
+        accept_jobs = []
+        for shipment_id, carrier, label in accept_plan:
+            if self.status(shipment_id)["status"] == "OPEN":
+                accept_jobs.append((label, self.send_write("accept_shipment_bid", [shipment_id], carrier)))
+        for label, tx_hash in accept_jobs:
+            self.await_write(label, tx_hash)
 
         # Guard lab: untrusted URL is rejected before the valid manifest lands.
         lax = id_map["lax_bcn_aerospace"]
@@ -573,6 +634,7 @@ class Runner:
                 expected_error=True,
             )
 
+        submit_plan = []
         for item in plan:
             if item["manifest"]:
                 carrier_role = {
@@ -581,9 +643,25 @@ class Runner:
                     "osl_nyc_seafood": "carrier_osl",
                     "lax_bcn_aerospace": "carrier_lax",
                 }[item["key"]]
-                self.ensure_submit(
-                    id_map[item["key"]], accounts[carrier_role], f"manifest {item['key']}", item["manifest"]
+                submit_plan.append(
+                    (
+                        id_map[item["key"]],
+                        accounts[carrier_role],
+                        f"manifest {item['key']}",
+                        item["manifest"],
+                    )
                 )
+        submit_jobs = []
+        for shipment_id, carrier, label, manifest in submit_plan:
+            if self.status(shipment_id)["status"] == "CARRIER_ACCEPTED":
+                submit_jobs.append(
+                    (
+                        label,
+                        self.send_write("submit_delivery_manifest", [shipment_id, manifest], carrier),
+                    )
+                )
+        for label, tx_hash in submit_jobs:
+            self.await_write(label, tx_hash)
 
         # Guard lab: post-manifest reclaim and pre-audit claim must both revert.
         if self.status(lax)["status"] == "MANIFEST_SUBMITTED":
@@ -656,31 +734,38 @@ class Runner:
                 account=accounts["carrier_dxb"],
             )
 
-        # Timed reclaim: wait out the shortest legal deadline, then reclaim.
+        # Timed reclaim and an FPT transfer can be submitted in one round.
         ham = id_map["sin_ham_abandoned"]
+        final_jobs = []
         if self.status(ham)["status"] == "OPEN":
             deadline = int(self.status(ham)["delivery_deadline_clock"])
             wait_for = deadline - self.chain_now() + 4
             if wait_for > 0:
                 print(f"[reclaim] waiting {wait_for}s for the deadline boundary", flush=True)
                 time.sleep(wait_for)
-            self.write(
-                "reclaim abandoned shipment",
-                "reclaim_expired_shipment",
-                [ham],
-                account=main,
+            final_jobs.append(
+                (
+                    "reclaim abandoned shipment",
+                    self.send_write("reclaim_expired_shipment", [ham], main),
+                )
             )
 
         # FPT transfer proof.
         carrier_gva = accounts["carrier_gva"]
         if int(self.read("get_token_balance", [carrier_gva.address])) < 5000 * FPT:
             self.write("top up carrier_gva", "faucet_or_deposit", [200_000 * FPT], account=carrier_gva)
-        self.write(
-            "transfer FPT carrier to shipper",
-            "transfer_tokens",
-            [main.address, 2500 * FPT],
-            account=carrier_gva,
-        )
+        if not any(
+            record.get("label") == "transfer FPT carrier to shipper"
+            for record in self.state.get("transactions", [])
+        ):
+            final_jobs.append(
+                (
+                    "transfer FPT carrier to shipper",
+                    self.send_write("transfer_tokens", [main.address, 2500 * FPT], carrier_gva),
+                )
+            )
+        for label, tx_hash in final_jobs:
+            self.await_write(label, tx_hash)
 
         return {"ids": id_map, "accounts": accounts}
 
@@ -694,7 +779,7 @@ class Runner:
             balances[role] = {
                 "address": account.address,
                 "fpt": int(self.read("get_token_balance", [account.address])),
-                "gen_wei": str(self.client.get_balance(account.address)),
+                "gen": str(self._call(self.client.get_balance, account.address)),
             }
         chain_sha, chain_code = self.verify_chain_code()
         self.state["verification"] = {
@@ -741,7 +826,8 @@ class Runner:
             "git_head": git_head() or deploy.get("git_head", ""),
             "main_signer": self.main.address,
             "burner_accounts": {
-                role: account.address for role, account in self.state.get("accounts", {}).items()
+                role: row.get("address", "")
+                for role, row in self.state.get("accounts", {}).items()
             },
             "four_way_sha256": four_way,
             "shipment_ids": self.state.get("shipments", {}),
@@ -755,6 +841,11 @@ class Runner:
                 "read back through the studionet RPC consensus data contract."
             ),
             "generated_at": now_iso(),
+            "rpc_pacing": {
+                "min_interval_seconds": MIN_RPC_INTERVAL,
+                "rate_limit_retries": self.rate_limit_hits,
+                "transient_retries": self.transient_retries,
+            },
         }
         EVIDENCE_PATH.parent.mkdir(parents=True, exist_ok=True)
         EVIDENCE_PATH.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
