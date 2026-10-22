@@ -136,6 +136,20 @@ function wholeFptToBase(whole: number): number {
   return Math.round(whole * FPT_UNIT);
 }
 
+// The contract requires delivery_deadline_clock >= (its own transaction timestamp)
+// + MIN_DEADLINE_WINDOW_SECONDS. The browser reads the chain clock before the
+// write is even submitted, and studionet stamps the transaction at leader
+// execution time, which is some seconds later. Without a margin the shortest
+// permitted lead collapses inside the minimum window and reverts. This buffer
+// absorbs that execution lag so even a floor-length deadline lands on chain.
+const DEADLINE_WINDOW_BUFFER_SECONDS = 180;
+
+function deadlineFrom(chainNow: number, leadSeconds: number): number {
+  const base = Math.max(Math.floor(chainNow), Math.floor(Date.now() / 1000));
+  const lead = Math.min(leadSeconds + DEADLINE_WINDOW_BUFFER_SECONDS, LIMITS.deadlineMaxSeconds);
+  return base + lead;
+}
+
 // Every helper below calls the real contract method through writeContract and
 // waits for the receipt, so the on-chain state is the source of truth.
 export function createShipmentOrder(
@@ -143,7 +157,7 @@ export function createShipmentOrder(
   input: CreateOrderInput,
   chainNow: number,
 ): Promise<WriteResult> {
-  const deadline = Math.floor(chainNow) + input.deadlineLeadSeconds;
+  const deadline = deadlineFrom(chainNow, input.deadlineLeadSeconds);
   return sendWrite(session, "create_shipment_order", [
     input.billOfLadingId.trim(),
     input.route.trim(),

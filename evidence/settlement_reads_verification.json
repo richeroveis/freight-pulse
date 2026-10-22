@@ -1,0 +1,15 @@
+{
+  "project": "FreightPulse",
+  "network": "studionet",
+  "chain_id": 61999,
+  "source": "Post-run contract view reads (list_shipments, get_token_balance, check_vault_invariants) independent of the UI",
+  "note": "Confirms the browser lifecycle run moved on-chain state: path A settled by consensus band, path B settled by co-signed mutual release at 7000 bps, path C reclaimed by the shipper after the deadline.",
+  "path_a_settled_with_consensus_band": null,
+  "path_b_mutual_release_settled": null,
+  "path_c_reclaimed": null,
+  "vault_matches_locked_escrow": null,
+  "supply_conserved": null,
+  "party_fpt_balances": null,
+  "contract_address": null,
+  "shipments": null
+}

@@ -32,8 +32,6 @@ artifacts/
 .git-askpass.cmd
 *.log
 
-# ignored probe files
-evidence/_*.html
-evidence/_*.js
-evidence/_*.txt
-evidence/_*.json
+# ignored probe and run artifacts (everything under evidence/ that is underscore-prefixed)
+evidence/_*
+evidence/_**/*

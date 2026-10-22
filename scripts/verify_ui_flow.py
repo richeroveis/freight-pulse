@@ -86,6 +86,40 @@ def verify_hash(tx_hash: str, expect: str) -> dict:
     return info
 
 
+def collect_requests(hashes: dict) -> list:
+    """Build the (hash, method, expect, path, step) work list.
+
+    Prefers the rich per-transaction list written by the full lifecycle driver,
+    and falls back to the legacy bucket layout for older evidence files.
+    """
+    requests: list = []
+    transactions = hashes.get("transactions")
+    if isinstance(transactions, list) and transactions:
+        for entry in transactions:
+            tx_hash = entry.get("hash")
+            if not tx_hash or entry.get("method") == "noop":
+                continue
+            requests.append(
+                {
+                    "hash": tx_hash,
+                    "method": entry.get("method", "write"),
+                    "expect": entry.get("expect", "return"),
+                    "path": entry.get("path", ""),
+                    "step": entry.get("step", ""),
+                }
+            )
+        return requests
+    legacy = [
+        ("faucet_or_deposit", "faucet_hashes", "return"),
+        ("create_shipment_order", "create_hashes", "return"),
+        ("guard probe submit_delivery_manifest", "guard_probe_hashes", "revert"),
+    ]
+    for label, bucket, expect in legacy:
+        for tx_hash in hashes.get(bucket, []):
+            requests.append({"hash": tx_hash, "method": label, "expect": expect, "path": "", "step": ""})
+    return requests
+
+
 def main() -> int:
     if not HASHES_PATH.exists():
         print("missing evidence/_e2e_hashes.json; run the Playwright flow first")
@@ -93,18 +127,16 @@ def main() -> int:
     hashes = json.loads(HASHES_PATH.read_text(encoding="utf-8"))
 
     records = []
-    for label, bucket, expect in [
-        ("faucet_or_deposit", "faucet_hashes", "return"),
-        ("create_shipment_order", "create_hashes", "return"),
-        ("guard probe submit_delivery_manifest", "guard_probe_hashes", "revert"),
-    ]:
-        for tx_hash in hashes.get(bucket, []):
-            print(f"[verify] {label} {tx_hash[:16]}...")
-            info = verify_hash(tx_hash, expect)
-            info["method"] = label
-            info["expected"] = expect
-            records.append(info)
-            time.sleep(1.5)
+    for request in collect_requests(hashes):
+        tx_hash = request["hash"]
+        print(f"[verify] {request['path']}/{request['step']} {request['method']} {tx_hash[:16]}...")
+        info = verify_hash(tx_hash, request["expect"])
+        info["method"] = request["method"]
+        info["expected"] = request["expect"]
+        info["path"] = request["path"]
+        info["step"] = request["step"]
+        records.append(info)
+        time.sleep(1.5)
 
     all_ok = bool(records) and all(record.get("ok") for record in records)
     evidence = {

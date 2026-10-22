@@ -124,11 +124,24 @@ The control tower keeps first paint under five RPC calls and uses `genlayer-js` 
 
 A CI step, `python scripts/check_frontend_bindings.py`, parses the contract public write methods and fails if any of them has no `writeContract` binding in the frontend, so the interface can never drift behind the contract again.
 
+## Browser end-to-end proof
+
+Every lifecycle action below was signed by the real built frontend (Playwright, burner wallet mode) against studionet, recorded in [`evidence/ui_flow_verification.json`](evidence/ui_flow_verification.json), verified through the explorer JSON API (FINALIZED plus the expected leader result) and read back from the contract in [`evidence/settlement_reads_verification.json`](evidence/settlement_reads_verification.json). Screenshots are in `evidence/screenshots/`. The driver is `tools/e2e_full_flow.mjs`; the verifiers are `scripts/verify_ui_flow.py` and `scripts/verify_settlement_reads.py`.
+
+| Path | Browser steps | Verified outcome |
+| --- | --- | --- |
+| Audit and claim | shipper create, carrier accept, carrier submit a public manifest, carrier live audit, carrier claim | order SETTLED, band `FULL_ON_TIME_RELEASE`, carrier paid 2800 FPT, escrow conserved |
+| Mutual release | shipper create, carrier accept, carrier co-sign 7000 bps, shipper co-sign 7000 bps | order SETTLED, band `MUTUAL_RELEASE_CO_SIGNED`, carrier 2200 FPT, shipper 600 FPT |
+| Timed reclaim | shipper create at the shortest permitted deadline, nobody accepts, shipper reclaims after the deadline | order RECLAIMED, shipper fee 2000 FPT refunded |
+| Guard and gating | untrusted manifest URL probe, and reclaim before the deadline | probe finalized with the leader reverting; the reclaim button was disabled with the deadline reason |
+
+Not driven from the browser this round: MetaMask mode stays untested in headless runs (no wallet extension), and the FPT transfer button is bound and lint-covered but was not exercised live. The burners are funded for gas by `scripts/e2e_fund_burners.py`. The run used a same-origin RPC proxy (`tools/e2e_proxy.mjs`) only to absorb transient studionet rate limiting in the browser; it changes no contract behavior and is not part of the deployed app.
+
 ## Demo video
 
-`docs/demo-video-subtitled.mp4` is a subtitled walkthrough with a synthesized ambient soundtrack. The file is committed to the repository (whitelisted in `.gitignore`) and is served directly by the Pages build at `https://richeroveis.github.io/freight-pulse/demo-video-subtitled.mp4`, so no release attachment is required.
+`docs/demo-video-subtitled.mp4` is a real screen recording of the built frontend driving the full lifecycle above against studionet in burner wallet mode, captured with Playwright and subtitled. It visibly shows the control deck forms, the live audit, the settlement claim, the two-party mutual release and the timed reclaim. The file is committed to the repository (whitelisted in `.gitignore`) and is served directly by the Pages build at `https://richeroveis.github.io/freight-pulse/demo-video-subtitled.mp4`, so no release attachment is required.
 
-- sha256: `e97d38fb2685de50f3c82c9f35fa22843669c923d577736fef2d28df8942cf7a`
+- sha256: `0097624da353c91af2984675c19718f5b010ae76239c92269fbfb24ab71b519a`
 
 ## License
 
