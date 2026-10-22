@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Check, Copy, Flame, LogOut, ShieldCheck, Wallet, Zap } from "lucide-react";
+import { Check, Copy, ExternalLink, Flame, LogOut, ShieldCheck, Wallet, Zap } from "lucide-react";
 import { sendWrite } from "../lib/genlayer";
-import { formatFpt, shortAddress } from "../lib/format";
+import { formatFpt, shortAddress, shortHash } from "../lib/format";
+import { EXPLORER_URL } from "../config";
 import { sound } from "../lib/sound";
 import type { WalletSession } from "../lib/wallet";
 
@@ -29,6 +30,7 @@ export function WalletPanel({
   const [copied, setCopied] = useState(false);
   const [faucetState, setFaucetState] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [faucetMessage, setFaucetMessage] = useState("");
+  const [faucetHash, setFaucetHash] = useState("");
 
   async function copy() {
     if (!session) return;
@@ -41,8 +43,10 @@ export function WalletPanel({
     if (!session) return;
     setFaucetState("sending");
     setFaucetMessage("");
+    setFaucetHash("");
     try {
       const result = await sendWrite(session, "faucet_or_deposit", [100_000 * FPT]);
+      setFaucetHash(result.hash);
       if (result.accepted) {
         setFaucetState("done");
         setFaucetMessage("Faucet confirmed. Balance refreshed.");
@@ -112,6 +116,16 @@ export function WalletPanel({
             <p className={`text-[10px] leading-4 ${faucetState === "done" ? "text-teal" : "text-coral"}`}>
               {faucetMessage}
             </p>
+          ) : null}
+          {faucetHash ? (
+            <a
+              href={`${EXPLORER_URL}/transactions/${faucetHash}`}
+              target="_blank"
+              rel="noreferrer"
+              className="mono flex items-center gap-1 text-[9px] text-ice hover:text-white"
+            >
+              faucet tx {shortHash(faucetHash)} <ExternalLink size={9} />
+            </a>
           ) : null}
           {session.kind === "burner" ? (
             <p className="text-[9px] leading-4 text-mist/45">

@@ -199,8 +199,60 @@ export async function simulateOnChain(input: SettlementInput): Promise<Settlemen
 export interface WriteResult {
   hash: string;
   accepted: boolean;
+  status: string;
+  finalized: boolean;
   executionError: string | null;
   raw: Record<string, unknown> | null;
+}
+
+function safeJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, (_key, item) =>
+      typeof item === "bigint" ? item.toString() : item,
+    );
+  } catch {
+    return String(value ?? "");
+  }
+}
+
+function statusNameOf(receipt: Record<string, unknown>): string {
+  const named = receipt.statusName ?? receipt.status_name;
+  if (typeof named === "string" && named) return named;
+  // The simplified studio receipt exposes status as a number where 7 is FINALIZED.
+  if (Number(receipt.status) === 7) return "FINALIZED";
+  return String(receipt.status ?? "");
+}
+
+// On studionet a contract revert finalizes with consensus MAJORITY_AGREE, so the
+// authoritative signal is the leader receipt: execution_result "ERROR" with the
+// prefixed reason in result.payload. A non-studio receipt instead exposes
+// txExecutionResultName directly.
+function readLeader(receipt: Record<string, unknown>): Record<string, unknown> | null {
+  const consensus = receipt.consensus_data as Record<string, unknown> | undefined;
+  const leader = consensus?.leader_receipt;
+  if (Array.isArray(leader)) return (leader[0] as Record<string, unknown>) ?? null;
+  if (leader && typeof leader === "object") return leader as Record<string, unknown>;
+  return null;
+}
+
+function extractRevertReason(receipt: Record<string, unknown>): string | null {
+  const executionName = String(
+    receipt.txExecutionResultName ?? receipt.tx_execution_result_name ?? "",
+  );
+  const leader = readLeader(receipt);
+  const leaderResult = (leader?.result ?? {}) as Record<string, unknown>;
+  const leaderStatus = String(leaderResult.status ?? "").toLowerCase();
+  const errored =
+    executionName === "FINISHED_WITH_ERROR" ||
+    leader?.execution_result === "ERROR" ||
+    leaderStatus === "rollback" ||
+    leaderStatus === "error";
+  if (!errored) return null;
+  const payload = leaderResult.payload ?? leaderResult.error ?? receipt.txExecutionError ?? receipt.error;
+  if (typeof payload === "string" && payload.trim()) return payload.trim();
+  const marker = /\[(?:EXPECTED|EXTERNAL|TRANSIENT|LLM_ERROR)\][^"\\}]*/.exec(safeJson(leader ?? receipt));
+  if (marker) return marker[0].trim();
+  return "Contract execution reverted";
 }
 
 export async function sendWrite(
@@ -218,21 +270,30 @@ export async function sendWrite(
   });
   const receipt = (await client.waitForTransactionReceipt({
     hash,
-    status: TransactionStatus.ACCEPTED,
-    retries: 80,
+    status: TransactionStatus.FINALIZED,
+    retries: 120,
     interval: 3000,
   })) as unknown as Record<string, unknown>;
 
-  const executionName = String(receipt.txExecutionResultName ?? receipt.tx_execution_result_name ?? "");
-  const executionError =
-    executionName === "FINISHED_WITH_ERROR"
-      ? String(receipt.txExecutionError ?? receipt.error ?? "Contract execution reverted")
-      : null;
+  // The simplified receipt can omit the leader detail, so read the full
+  // transaction once for the authoritative status and revert payload.
+  let detail: Record<string, unknown> = receipt;
+  try {
+    detail = (await client.getTransaction({ hash })) as unknown as Record<string, unknown>;
+  } catch {
+    detail = receipt;
+  }
+
+  const status = statusNameOf(detail);
+  const finalized = status === "FINALIZED";
+  const executionError = extractRevertReason(detail);
 
   return {
     hash: String(hash),
-    accepted: !executionError,
+    accepted: finalized && !executionError,
+    status: status || "UNKNOWN",
+    finalized,
     executionError,
-    raw: receipt,
+    raw: detail,
   };
 }

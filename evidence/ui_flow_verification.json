@@ -1,0 +1,50 @@
+{
+  "project": "FreightPulse",
+  "network": "studionet",
+  "chain_id": 61999,
+  "contract_address": "0x67D9ed75E65E646499013e9da65caace82c97eb9",
+  "source": "Playwright driven frontend, burner wallet mode",
+  "app_url_under_test": "http://127.0.0.1:4173/freight-pulse/",
+  "explorer_json_api": "https://explorer-studio.genlayer.com/api/transactions/",
+  "verification_basis": "Every hash below was signed by the browser through writeContract and is read back from the studionet explorer JSON API. Lifecycle writes must finalize with the leader returning; the guard probe must finalize with the leader reverting.",
+  "transactions": [
+    {
+      "tx_hash": "0xa5ffe425787b0296ed10c74ff4b8f8a390f4ffa988a117876fe3ecc6c050b4b2",
+      "explorer_url": "https://explorer-studio.genlayer.com/transactions/0xa5ffe425787b0296ed10c74ff4b8f8a390f4ffa988a117876fe3ecc6c050b4b2",
+      "status": "FINALIZED",
+      "from_address": "0x43B962C6f4fd38A2f582F5C90e3021af158625f8",
+      "to_address": "0x67D9ed75E65E646499013e9da65caace82c97eb9",
+      "leader_execution_result": "SUCCESS",
+      "leader_result_text": "\u0000\ufffd\ufffd\ufffdF",
+      "ok": true,
+      "method": "faucet_or_deposit",
+      "expected": "return"
+    },
+    {
+      "tx_hash": "0x7f3b409f198f1b3d6b7a94048a55602a0124b001bb5e522f50af1d94691ce60a",
+      "explorer_url": "https://explorer-studio.genlayer.com/transactions/0x7f3b409f198f1b3d6b7a94048a55602a0124b001bb5e522f50af1d94691ce60a",
+      "status": "FINALIZED",
+      "from_address": "0x43B962C6f4fd38A2f582F5C90e3021af158625f8",
+      "to_address": "0x67D9ed75E65E646499013e9da65caace82c97eb9",
+      "leader_execution_result": "SUCCESS",
+      "leader_result_text": "\u00009",
+      "ok": true,
+      "method": "create_shipment_order",
+      "expected": "return"
+    },
+    {
+      "tx_hash": "0xf547525aaa1f8039642d22b55c87a127129784cff202d6e9786790a5b86c2f72",
+      "explorer_url": "https://explorer-studio.genlayer.com/transactions/0xf547525aaa1f8039642d22b55c87a127129784cff202d6e9786790a5b86c2f72",
+      "status": "FINALIZED",
+      "from_address": "0x43B962C6f4fd38A2f582F5C90e3021af158625f8",
+      "to_address": "0x67D9ed75E65E646499013e9da65caace82c97eb9",
+      "leader_execution_result": "ERROR",
+      "leader_result_text": "\u0001[EXPECTED] shipment is not awaiting a delivery manifest",
+      "ok": true,
+      "method": "guard probe submit_delivery_manifest",
+      "expected": "revert"
+    }
+  ],
+  "all_expected": true,
+  "generated_at": "2026-10-22T17:18:01Z"
+}

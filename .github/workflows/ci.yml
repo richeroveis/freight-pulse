@@ -19,6 +19,8 @@ jobs:
         run: genvm-lint check contracts/freight_pulse.py
       - name: Direct mode test suite
         run: pytest tests/test_freight_pulse_direct.py -q
+      - name: Frontend lifecycle binding check
+        run: python scripts/check_frontend_bindings.py
 
   frontend:
     runs-on: ubuntu-latest

@@ -21,8 +21,24 @@ declare global {
 }
 
 export function createBurnerSession(): WalletSession {
-  const account = createAccount();
+  // A burner key may be supplied through localStorage so automated end-to-end
+  // runs and power users can reuse a pre-funded test account. The key stays in
+  // the page memory, is never sent anywhere and is never logged. With no stored
+  // key the button behaves as a fresh one-click burner.
+  const storedKey = readStoredBurnerKey();
+  const account = storedKey ? createAccount(storedKey) : createAccount();
   return { kind: "burner", address: account.address, account };
+}
+
+function readStoredBurnerKey(): `0x${string}` | null {
+  try {
+    const raw = window.localStorage.getItem("fp_burner_key");
+    if (!raw) return null;
+    const trimmed = raw.trim().replace(/^0x/i, "");
+    return /^[0-9a-fA-F]{64}$/.test(trimmed) ? (`0x${trimmed}` as `0x${string}`) : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function connectMetaMask(): Promise<WalletSession> {

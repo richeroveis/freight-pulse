@@ -29,7 +29,11 @@ artifacts/
 
 # local credential helper
 .git-askpass.sh
+.git-askpass.cmd
+*.log
 
 # ignored probe files
 evidence/_*.html
 evidence/_*.js
+evidence/_*.txt
+evidence/_*.json

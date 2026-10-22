@@ -137,7 +137,7 @@ export function Simulator({ shipment }: { shipment: Shipment }) {
     <div className="panel overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rail/60 px-5 py-4">
         <div>
-          <p className="label">Interactive settlement lab</p>
+          <p className="label">Illustration only, not a transaction</p>
           <h2 className="mt-1 flex items-center gap-2 text-base font-semibold text-white">
             <SlidersHorizontal size={15} className="text-ice" /> What-if cold-chain simulator
           </h2>

@@ -10,7 +10,10 @@ export const FPT_DECIMALS = 6;
 export const REPO_URL = "https://github.com/richeroveis/freight-pulse";
 export const EVIDENCE_URL = `${REPO_URL}/blob/main/evidence/studionet_deployment.json`;
 export const EXPLORER_URL = "https://explorer-studio.genlayer.com";
-export const DEMO_VIDEO_URL = `${REPO_URL}/releases/download/studionet-v1/demo-video-subtitled.mp4`;
+export const UI_FLOW_EVIDENCE_URL = `${REPO_URL}/blob/main/evidence/ui_flow_verification.json`;
+// The demo video is committed to the repository (whitelisted in .gitignore) and
+// is also served by the Pages build, so this link resolves without a release.
+export const DEMO_VIDEO_URL = "https://richeroveis.github.io/freight-pulse/demo-video-subtitled.mp4";
 
 export const PRINCIPLE_TEXT =
   "Both validator answers must be identical on three consensus fields: fulfilment_band " +

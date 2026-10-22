@@ -25,7 +25,8 @@ admin or steward method that can move funds.
 | Settlement claim | The vault pays the carrier and shipper by the settled band. Every path conserves `freight_fee + carrier_bond` exactly. |
 | Mutual release | Shipper and carrier can co-sign a split. One signature never settles. The two stored bps values must match exactly. |
 | Timed reclaim | If no carrier accepts, or the carrier misses the deadline without a timely manifest, the shipper recovers the fee and the forfeited bond. A timely manifest blocks reclaim while verification is pending. |
-| Guard lab | One-click probes in the UI demonstrate unilateral release rejection, post-manifest reclaim rejection and untrusted URL rejection. |
+| Guard lab | Live probe buttons sign real studionet transactions that the contract must reject (non-HTTPS URL, temperature ceiling, bps ceiling), and read the revert reason back from the finalized receipt. |
+| Control deck | Signed forms for every lifecycle write method: create order, accept bid, submit manifest, run live audit, claim settlement, propose mutual release from each party, timed reclaim and an FPT transfer. |
 
 ## Settlement bands
 
@@ -119,15 +120,15 @@ npm install
 npm run dev
 ```
 
-The control tower uses `genlayer-js` read calls without local ABI overrides and keeps first load
-under five RPC calls. The what-if simulator mirrors `_compute_fulfilment_band` client-side and also
-exposes the on-chain `simulate_settlement_split` view for verification.
+The control tower keeps first paint under five RPC calls and uses `genlayer-js` read calls with no local ABI override. The control deck signs real lifecycle transactions in a burner wallet or through MetaMask with `writeContract`, waits for the receipt, shows the transaction hash and explorer link, polls the status to `FINALIZED`, and surfaces the contract revert message on failure. Every public write method is bound: `create_shipment_order`, `accept_shipment_bid`, `submit_delivery_manifest`, `audit_shipment_fulfilment_live`, `claim_shipment_settlement`, `propose_mutual_release`, `reclaim_expired_shipment`, `transfer_tokens` and `faucet_or_deposit`. Client-side forms mirror the contract floors and ceilings, including the 180 second to 180 day deadline window, 1 to 8760 hour transit, -90 to 60 C temperature and the positive bounded amounts. The guard lab buttons sign live transactions that are expected to revert and read the guard reason back from the finalized receipt. The what-if simulator is illustration only and its verify button reads the on-chain `simulate_settlement_split` view.
+
+A CI step, `python scripts/check_frontend_bindings.py`, parses the contract public write methods and fails if any of them has no `writeContract` binding in the frontend, so the interface can never drift behind the contract again.
 
 ## Demo video
 
-`docs/demo-video-subtitled.mp4` is a 48 second, 1280x720, English-subtitled walkthrough with a
-synthesized ambient soundtrack. Media files are gitignored on `main` and attached to the release
-`studionet-v1`.
+`docs/demo-video-subtitled.mp4` is a subtitled walkthrough with a synthesized ambient soundtrack. The file is committed to the repository (whitelisted in `.gitignore`) and is served directly by the Pages build at `https://richeroveis.github.io/freight-pulse/demo-video-subtitled.mp4`, so no release attachment is required.
+
+- sha256: `e97d38fb2685de50f3c82c9f35fa22843669c923d577736fef2d28df8942cf7a`
 
 ## License
 

@@ -15,17 +15,41 @@ import pytest
 
 
 if sys.platform == "win32":  # pragma: no cover - exercised only on Windows
+    import atexit
+    import stat
+
     _real_unlink = os.unlink
     _real_remove = os.remove
+    _deferred_unlinks: set[str] = set()
+
+    def _flush_deferred_unlinks() -> None:
+        for stale in list(_deferred_unlinks):
+            try:
+                _real_unlink(stale)
+                _deferred_unlinks.discard(stale)
+            except OSError:
+                pass
 
     def _force_unlink(path, *args, **kwargs):
-        import stat
-
+        # The direct runner does os.dup2(fd, 0) and keeps stdin pointed at a
+        # temp message file for the whole call, then unlinks it immediately.
+        # That is legal on POSIX but raises WinError 32 on Windows because the
+        # handle is still open. Defer those cleanups to interpreter exit. This
+        # only changes when a temp file is deleted, never a test assertion.
         try:
             _real_unlink(path, *args, **kwargs)
-        except PermissionError:
-            os.chmod(path, stat.S_IWRITE)
-            _real_unlink(path, *args, **kwargs)
+            return
+        except PermissionError as error:
+            winerror = getattr(error, "winerror", None)
+            if winerror in (5, 32):
+                try:
+                    os.chmod(path, stat.S_IWRITE)
+                except OSError:
+                    pass
+                _deferred_unlinks.add(str(path))
+                atexit.register(_flush_deferred_unlinks)
+                return
+            raise
 
     os.unlink = _force_unlink
     os.remove = _force_unlink

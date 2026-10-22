@@ -26,6 +26,7 @@ import {
   EXPLORER_URL,
   PRINCIPLE_TEXT,
   REPO_URL,
+  UI_FLOW_EVIDENCE_URL,
 } from "./config";
 import { SNAPSHOT } from "./data/snapshot";
 import { DEPLOY_TX_HASH, FOUR_WAY, GUARD_EVIDENCE } from "./data/evidence";
@@ -40,6 +41,7 @@ import { ShipmentTable } from "./components/ShipmentTable";
 import { ShipmentDetail } from "./components/ShipmentDetail";
 import { Simulator } from "./components/Simulator";
 import { GuardLab } from "./components/GuardLab";
+import { ControlDeck } from "./components/ControlDeck";
 import { ConsensusDrawer } from "./components/ConsensusDrawer";
 import { WalletPanel } from "./components/WalletPanel";
 import { BandBadge, EmptyState, SectionTitle } from "./components/ui";
@@ -372,12 +374,21 @@ export default function App() {
           </div>
         </div>
 
+        <section id="deck" className="scroll-mt-24">
+          <ControlDeck
+            session={session}
+            chainTime={data.chainTime}
+            shipment={selected ?? null}
+            onAfterWrite={() => void refresh()}
+          />
+        </section>
+
         <section id="simulator" className="scroll-mt-24">
           {selected ? <Simulator shipment={selected} /> : null}
         </section>
 
         <section id="guards" className="scroll-mt-24">
-          <GuardLab />
+          <GuardLab session={session} shipment={selected ?? null} chainTime={data.chainTime} />
         </section>
 
         <section id="evidence" className="panel scroll-mt-24 overflow-hidden">
@@ -385,9 +396,14 @@ export default function App() {
             eyebrow="Verifiable delivery"
             title="Evidence, hashes and deployment identity"
             action={
-              <a href={EVIDENCE_URL} target="_blank" rel="noreferrer" className="btn">
-                <FileJson size={13} /> evidence JSON
-              </a>
+              <div className="flex gap-2">
+                <a href={EVIDENCE_URL} target="_blank" rel="noreferrer" className="btn">
+                  <FileJson size={13} /> evidence JSON
+                </a>
+                <a href={UI_FLOW_EVIDENCE_URL} target="_blank" rel="noreferrer" className="btn">
+                  <FileJson size={13} /> UI flow proof
+                </a>
+              </div>
             }
           />
           <div className="grid gap-4 p-5 lg:grid-cols-[1.1fr_1fr]">
